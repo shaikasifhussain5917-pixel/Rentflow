@@ -1,0 +1,610 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import type { ReactNode } from "react";
+import {
+  typeImages,
+  type ActivityItem,
+  type ActivityType,
+  type PaymentMethod,
+  type PaymentState,
+  type Payment,
+  type Property,
+  type PropertyType,
+  type Tenant,
+  type Unit,
+} from "./types";
+import { currency } from "../utils/format";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../contexts/AuthContext";
+
+export interface NewPropertyInput {
+  name: string;
+  address: string;
+  locality: string;
+  city: string;
+  type: PropertyType;
+  units: number;
+  defaultRent: number;
+  deposit: number;
+  image: string;
+  notes: string;
+}
+
+export type PropertyPatch = Partial<Omit<Property, "id">>;
+
+interface PortfolioContextValue {
+  properties: Property[];
+  units: Unit[];
+  tenants: Tenant[];
+  payments: Payment[];
+  activity: ActivityItem[];
+  isLoading: boolean;
+  addProperty: (input: NewPropertyInput) => Promise<string | undefined>;
+  updateProperty: (id: string, patch: PropertyPatch) => Promise<void>;
+  addUnit: (propertyId: string, input: { number: string; config: string; rent: number }) => Promise<void>;
+  assignTenant: (unitId: string, input: { name: string; phone: string; rent: number }) => void;
+  recordRent: (unitId: string, method: PaymentMethod) => Promise<void>;
+  resolveMaintenance: (unitId: string) => void;
+  addExpense: (propertyId: string, input: { category: string; amount: number; note: string }) => Promise<void>;
+  updateRentStatus: (tenantId: string, isPaid: boolean) => Promise<void>;
+  deleteProperty: (propertyId: string) => Promise<void>;
+}
+
+const PortfolioContext = createContext<PortfolioContextValue | null>(null);
+
+const defaultConfig: Record<PropertyType, string> = {
+  Apartment: "2BHK",
+  "Independent House": "House",
+  Villa: "Villa",
+  Shop: "Shop",
+  Office: "Office",
+  Other: "Unit",
+};
+
+function unitNumbers(count: number) {
+  if (count === 1) return ["Main"];
+  return Array.from({ length: count }, (_, i) => `${Math.floor(i / 4) + 1}0${(i % 4) + 1}`);
+}
+
+const mapProperty = (row: any): Property => ({
+  id: row.id,
+  name: row.name,
+  address: row.address,
+  locality: row.locality,
+  city: row.city,
+  type: row.type as PropertyType,
+  image: row.image,
+  secondaryImage: row.secondary_image,
+  depositPerUnit: row.deposit_per_unit,
+  notes: row.notes,
+});
+
+const mapUnit = (row: any): Unit => ({
+  id: row.id,
+  propertyId: row.property_id,
+  number: row.number,
+  config: row.config,
+  rent: row.rent,
+  status: row.status as "vacant" | "occupied" | "maintenance",
+  vacantDays: row.vacant_days,
+  maintenanceNote: row.maintenance_note,
+});
+
+const mapTenant = (row: any): Tenant => ({
+  id: row.id,
+  name: row.name,
+  phone: row.phone,
+  email: row.email,
+  propertyId: row.property_id,
+  property: row.units?.properties?.name || row.properties?.name || "",
+  unitId: row.unit_id,
+  unit: row.units?.number || "",
+  since: row.lease_start || row.since || "Recent",
+  rent: row.monthly_rent || row.rent,
+  state: row.payment_state || row.state || "due",
+  status: row.status,
+});
+
+const mapPayment = (row: any): Payment => ({
+  id: row.id,
+  tenantId: row.tenant_id,
+  tenant: row.tenants?.name || "",
+  propertyId: row.property_id,
+  property: row.tenants?.units?.properties?.name || "",
+  unitId: row.unit_id,
+  unit: row.tenants?.units?.number || "",
+  amount: row.amount,
+  date: row.payment_date,
+  billingMonth: row.billing_month,
+  method: row.method as PaymentMethod,
+  state: row.state as PaymentState,
+  reference: row.reference,
+  notes: row.notes,
+});
+
+const mapActivity = (row: any): ActivityItem => {
+  const d = new Date(row.created_at);
+  const now = new Date();
+  const diff = now.getTime() - d.getTime();
+  
+  return {
+    id: row.id,
+    propertyId: row.property_id,
+    type: row.type as ActivityType,
+    title: row.title,
+    detail: row.detail,
+    daysAgo: Math.floor(diff / 86400000),
+    hoursAgo: Math.floor(diff / 3600000),
+    time: d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }),
+  };
+};
+
+export function PortfolioProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [units, setUnits] = useState<Unit[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchPortfolio = useCallback(async () => {
+    if (!user) {
+      setProperties([]);
+      setUnits([]);
+      setTenants([]);
+      setPayments([]);
+      setActivity([]);
+      setIsLoading(false);
+      return;
+    }
+    
+    setIsLoading(true);
+    try {
+      const [propsRes, unitsRes, tenantsRes, paymentsRes, activitiesRes] = await Promise.all([
+        supabase.from("properties").select("*").order("created_at", { ascending: false }),
+        supabase.from("units").select("*").order("created_at", { ascending: false }),
+        supabase.from("tenants").select("*, units(number, properties(name))").order("created_at", { ascending: false }),
+        supabase.from("payments").select("*, tenants(name, units(number, properties(name)))").order("payment_date", { ascending: false }),
+        supabase.from("activities").select("*").order("created_at", { ascending: false }).limit(100),
+      ]);
+      
+      if (propsRes.error) throw propsRes.error;
+      if (unitsRes.error) throw unitsRes.error;
+      if (tenantsRes.error) throw tenantsRes.error;
+      if (paymentsRes.error) throw paymentsRes.error;
+      if (activitiesRes.error) throw activitiesRes.error;
+      
+      const activeTenants = tenantsRes.data.filter((t: any) => t.status === "active");
+      const localUnits = unitsRes.data.map((u: any) => {
+        const matchingTenant = activeTenants.find((t: any) => t.unit_id === u.id);
+        const mapped = mapUnit(u);
+        if (matchingTenant) {
+          mapped.tenantId = matchingTenant.id;
+        }
+        return mapped;
+      });
+
+      const today = new Date();
+      const currentBillingMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+
+      const mappedTenants = tenantsRes.data.map((t: any) => {
+        const tenant = mapTenant(t);
+        const currentPayment = paymentsRes.data.find(
+          (p: any) => p.tenant_id === tenant.id && p.billing_month === currentBillingMonth
+        );
+        tenant.state = currentPayment?.state === "paid" ? "paid" : "due";
+        return tenant;
+      });
+
+      setProperties(propsRes.data.map(mapProperty));
+      setUnits(localUnits);
+      setTenants(mappedTenants);
+      setPayments(paymentsRes.data.map(mapPayment));
+      setActivity(activitiesRes.data.map(mapActivity));
+    } catch (err: any) {
+      console.error("Portfolio fetch error", {
+        message: err.message,
+        details: err.details,
+        hint: err.hint,
+        code: err.code,
+        query: err
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    fetchPortfolio();
+  }, [fetchPortfolio]);
+
+  const log = useCallback(async (propertyId: string, type: ActivityType, title: string, detail: string) => {
+    if (!user) return;
+    try {
+      const { error } = await supabase.from("activities").insert({
+        owner_id: user.id,
+        property_id: propertyId,
+        type,
+        title,
+        detail,
+      });
+      if (error) {
+        console.error("Log error", error);
+        return;
+      }
+      await fetchPortfolio();
+    } catch (err) {
+      console.error("Log error:", err);
+    }
+  }, [user, fetchPortfolio]);
+
+  const addProperty = useCallback<PortfolioContextValue["addProperty"]>(
+    async (input) => {
+      if (!user) return;
+      try {
+        const { data: propData, error: propError } = await supabase
+          .from("properties")
+          .insert({
+            owner_id: user.id,
+            name: input.name.trim(),
+            address: input.address.trim(),
+            locality: input.locality.trim(),
+            city: input.city.trim() || "Hyderabad",
+            type: input.type,
+            image: input.image || typeImages[input.type],
+            deposit_per_unit: input.deposit,
+            notes: input.notes.trim(),
+          })
+          .select()
+          .single();
+
+        if (propError) throw propError;
+        
+        const propertyId = propData.id;
+        
+        const unitsToInsert = unitNumbers(input.units).map((n) => ({
+          owner_id: user.id,
+          property_id: propertyId,
+          number: n,
+          config: defaultConfig[input.type],
+          rent: input.defaultRent,
+          status: "vacant",
+          vacant_days: 0,
+        }));
+
+        const { error: unitsError } = await supabase
+          .from("units")
+          .insert(unitsToInsert);
+
+        if (unitsError) throw unitsError;
+
+        await fetchPortfolio();
+        log(propertyId, "note", "Property added", `${propData.name} · ${input.units} ${input.units === 1 ? "unit" : "units"}`);
+        return propertyId;
+      } catch (err) {
+        console.error("Error adding property:", err);
+      }
+    },
+    [user, fetchPortfolio, log],
+  );
+
+  const updateProperty = useCallback<PortfolioContextValue["updateProperty"]>(
+    async (id, patch) => {
+      if (!user) return;
+      try {
+        const dbPatch: any = {};
+        if (patch.name !== undefined) dbPatch.name = patch.name;
+        if (patch.address !== undefined) dbPatch.address = patch.address;
+        if (patch.locality !== undefined) dbPatch.locality = patch.locality;
+        if (patch.city !== undefined) dbPatch.city = patch.city;
+        if (patch.type !== undefined) dbPatch.type = patch.type;
+        if (patch.image !== undefined) dbPatch.image = patch.image;
+        if (patch.secondaryImage !== undefined) dbPatch.secondary_image = patch.secondaryImage;
+        if (patch.depositPerUnit !== undefined) dbPatch.deposit_per_unit = patch.depositPerUnit;
+        if (patch.notes !== undefined) dbPatch.notes = patch.notes;
+
+        const { error } = await supabase
+          .from("properties")
+          .update(dbPatch)
+          .eq("id", id)
+          .eq("owner_id", user.id);
+
+        if (error) throw error;
+        
+        await fetchPortfolio();
+        log(id, "note", "Property details updated", "Information edited");
+      } catch (err) {
+        console.error("Error updating property:", err);
+      }
+    },
+    [user, fetchPortfolio, log],
+  );
+
+  const deleteProperty = useCallback<PortfolioContextValue["deleteProperty"]>(async (propertyId) => {
+    if (!user) return;
+    const { error } = await supabase.rpc('delete_property_safely', {
+      target_property_id: propertyId
+    });
+    if (error) throw error;
+    await fetchPortfolio();
+  }, [user, fetchPortfolio]);
+
+  const addUnit = useCallback<PortfolioContextValue["addUnit"]>(
+    async (propertyId, input) => {
+      if (!user) return;
+      try {
+        const { data, error } = await supabase
+          .from("units")
+          .insert({
+            owner_id: user.id,
+            property_id: propertyId,
+            number: input.number.trim(),
+            config: input.config.trim() || "Unit",
+            rent: input.rent,
+            status: "vacant",
+            vacant_days: 0,
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+
+        await fetchPortfolio();
+        log(propertyId, "vacancy", `Unit ${data.number} added`, `${data.config} · listed at ${currency(data.rent)}`);
+      } catch (err) {
+        console.error("Error adding unit:", err);
+      }
+    },
+    [user, fetchPortfolio, log],
+  );
+
+  const assignTenant = useCallback<PortfolioContextValue["assignTenant"]>(
+    async (unitId, input) => {
+      if (!user) return;
+      const unit = units.find((u) => u.id === unitId);
+      const property = unit && properties.find((p) => p.id === unit.propertyId);
+      if (!unit || !property) return;
+      const name = input.name.trim();
+      const parts = name.toLowerCase().split(" ");
+      const email = `${parts[0]}.${parts[parts.length - 1]}@gmail.com`;
+      const since = new Date().toISOString().split('T')[0];
+      
+      try {
+        const { data: tenantData, error: tenantError } = await supabase.from("tenants").insert({
+          owner_id: user.id,
+          property_id: property.id,
+          unit_id: unitId,
+          name,
+          phone: input.phone.trim() || "—",
+          email,
+          monthly_rent: input.rent,
+          lease_start: since,
+          payment_state: "due",
+          status: "active"
+        }).select().single();
+
+        if (tenantError) {
+          console.error("Assign tenant error", {
+            message: tenantError.message,
+            details: tenantError.details,
+            hint: tenantError.hint,
+            code: tenantError.code,
+          });
+          throw tenantError;
+        }
+
+        const { error: unitError } = await supabase
+          .from("units")
+          .update({ status: "occupied", vacant_days: null, maintenance_note: null })
+          .eq("id", unitId)
+          .eq("owner_id", user.id);
+
+        if (unitError) {
+          console.error("Update unit error:", {
+            message: unitError.message,
+            details: unitError.details,
+            hint: unitError.hint,
+            code: unitError.code,
+          });
+          throw unitError;
+        }
+
+        const today = new Date();
+        const billingMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+
+        const { error: paymentError } = await supabase.from("payments").insert({
+          owner_id: user.id,
+          property_id: property.id,
+          unit_id: unitId,
+          tenant_id: tenantData.id,
+          amount: input.rent,
+          payment_date: today.toISOString().split('T')[0],
+          billing_month: billingMonth,
+          method: "UPI",
+          state: "due"
+        });
+        
+        if (paymentError) {
+          console.error("Assign tenant payment error:", {
+            message: paymentError.message,
+            details: paymentError.details,
+            hint: paymentError.hint,
+            code: paymentError.code,
+          });
+          throw paymentError;
+        }
+
+        await fetchPortfolio();
+        log(property.id, "lease", `Unit ${unit.number} rented`, `${name} · ${currency(input.rent)} / month`);
+      } catch (err) {
+        console.error(err);
+        await fetchPortfolio();
+        throw err;
+      }
+    },
+    [user, units, properties, fetchPortfolio, log],
+  );
+
+  const recordRent = useCallback<PortfolioContextValue["recordRent"]>(
+    async (unitId, method) => {
+      if (!user) return;
+      const unit = units.find((u) => u.id === unitId);
+      const tenant = unit && tenants.find((t) => t.id === unit.tenantId);
+      if (!unit || !tenant) return;
+      
+      const today = new Date();
+      const billingMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+
+      try {
+        const { error: paymentError } = await supabase.from("payments").upsert({
+          owner_id: user.id,
+          property_id: tenant.propertyId,
+          unit_id: unitId,
+          tenant_id: tenant.id,
+          amount: unit.rent,
+          payment_date: today.toISOString().split('T')[0],
+          billing_month: billingMonth,
+          method,
+          state: "paid"
+        }, { onConflict: "tenant_id, billing_month" });
+
+        if (paymentError) throw paymentError;
+
+
+        
+        await fetchPortfolio();
+        log(unit.propertyId, "payment", `${currency(unit.rent)} rent received`, `Unit ${unit.number} · ${tenant.name}`);
+      } catch (err) {
+        console.error("Error recording rent:", err);
+        throw err;
+      }
+    },
+    [user, units, tenants, fetchPortfolio, log],
+  );
+
+  const updateRentStatus = useCallback<PortfolioContextValue["updateRentStatus"]>(
+    async (tenantId, isPaid) => {
+      if (!user) return;
+      const tenant = tenants.find((t) => t.id === tenantId);
+      const unit = units.find((u) => u.id === tenant?.unitId);
+      if (!tenant || !unit) return;
+
+      const today = new Date();
+      const billingMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`;
+
+      try {
+        const payload: any = {
+          owner_id: user.id,
+          property_id: tenant.propertyId,
+          unit_id: unit.id,
+          tenant_id: tenant.id,
+          amount: unit.rent,
+          billing_month: billingMonth,
+          state: isPaid ? "paid" : "due",
+        };
+
+        if (isPaid) {
+          payload.payment_date = today.toISOString().split("T")[0];
+          payload.method = "UPI"; // fallback/default
+        } else {
+          payload.payment_date = null;
+          payload.method = null;
+        }
+
+        const { error: paymentError } = await supabase
+          .from("payments")
+          .upsert(payload, { onConflict: "tenant_id, billing_month" });
+
+        if (paymentError) throw paymentError;
+
+        await fetchPortfolio();
+        if (isPaid) {
+          log(tenant.propertyId, "payment", `${currency(unit.rent)} rent received`, `Unit ${unit.number} · ${tenant.name}`);
+        }
+      } catch (err) {
+        console.error("Error updating rent status:", err);
+        throw err;
+      }
+    },
+    [user, tenants, units, fetchPortfolio, log],
+  );
+
+  const resolveMaintenance = useCallback<PortfolioContextValue["resolveMaintenance"]>(
+    (unitId) => {
+      const unit = units.find((u) => u.id === unitId);
+      if (!unit) return;
+      setUnits((prev) =>
+        prev.map((u) =>
+          u.id === unitId ? { ...u, status: "vacant", vacantDays: 0, maintenanceNote: undefined } : u,
+        ),
+      );
+      log(unit.propertyId, "maintenance", "Maintenance resolved", `Unit ${unit.number} is ready to let`);
+    },
+    [units, log],
+  );
+
+  const addExpense = useCallback<PortfolioContextValue["addExpense"]>(
+    async (propertyId, input) => {
+      if (!user) return;
+      try {
+        const today = new Date();
+        const { error } = await supabase.from("expenses").insert({
+          owner_id: user.id,
+          property_id: propertyId,
+          amount: input.amount,
+          category: input.category,
+          expense_date: today.toISOString().split('T')[0],
+          note: input.note || null
+        });
+
+        if (error) {
+          console.error("Add expense error:", {
+            message: error.message,
+            details: error.details,
+            hint: error.hint,
+            code: error.code,
+          });
+          throw error;
+        }
+
+        await log(propertyId, "expense", `${currency(input.amount)} ${input.category.toLowerCase()} expense`, input.note || "Logged");
+      } catch (err) {
+        console.error("Add expense error:", err);
+        throw err;
+      }
+    },
+    [user, log],
+  );
+
+  const value = useMemo(
+    () => ({
+      properties,
+      units,
+      tenants,
+      payments,
+      activity,
+      isLoading,
+      addProperty,
+      updateProperty,
+      addUnit,
+      assignTenant,
+      recordRent,
+      resolveMaintenance,
+      addExpense,
+      updateRentStatus,
+      deleteProperty,
+    }),
+    [properties, units, tenants, payments, activity, isLoading, addProperty, updateProperty, addUnit, assignTenant, recordRent, resolveMaintenance, addExpense, updateRentStatus, deleteProperty],
+  );
+
+  return <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function usePortfolio() {
+  const ctx = useContext(PortfolioContext);
+  if (!ctx) throw new Error("usePortfolio must be used inside <PortfolioProvider>");
+  return ctx;
+}
