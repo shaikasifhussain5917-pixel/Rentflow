@@ -104,7 +104,7 @@ export default function Properties() {
   };
 
   return (
-    <div className="space-y-8 sm:space-y-9">
+    <div className="space-y-5 sm:space-y-9 pb-24 sm:pb-0">
       <PageHeader
         eyebrow="Properties"
         title="Your rental portfolio"
@@ -147,7 +147,7 @@ export default function Properties() {
                 onChange={(e) => setQuery(e.target.value)}
                 aria-label="Search properties"
               />
-              <div className="-mx-5 overflow-x-auto px-5 sm:mx-0 sm:overflow-visible sm:px-0">
+              <div className="w-full overflow-x-auto pb-1 scrollbar-hide">
                 <Segmented<Filter>
                   label="Filter by state"
                   value={filter}
@@ -162,9 +162,10 @@ export default function Properties() {
               </div>
             </div>
 
-            <div className="flex items-center justify-between gap-3 sm:justify-end">
+            <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
               <Dropdown
-                align="right"
+                align="left"
+                menuClassName="left-0 sm:left-auto sm:right-0"
                 trigger={
                   <span className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-[var(--color-line-strong)] bg-[var(--color-surface)] px-3.5 text-[13px] font-medium text-[var(--color-ink)] transition-colors hover:bg-[var(--color-surface-muted)]">
                     <ArrowDownUp className="size-4 stroke-[1.7] text-[var(--color-ink-faint)]" />

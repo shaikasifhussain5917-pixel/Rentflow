@@ -4,7 +4,9 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { AppShell } from "./components/shell/AppShell";
 import { ProtectedRoute } from "./components/shell/ProtectedRoute";
 import Login from "./pages/Login";
+import Setup from "./pages/Setup";
 import ResetPassword from "./pages/ResetPassword";
+import AuthCallback from "./pages/AuthCallback";
 import Dashboard from "./pages/Dashboard";
 import Properties from "./pages/Properties";
 import PropertyDetail from "./pages/PropertyDetail";
@@ -24,7 +26,9 @@ export default function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
             <Route element={<ProtectedRoute />}>
+              <Route path="/setup" element={<Setup />} />
               <Route element={<AppShell />}>
                 <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/properties" element={<Properties />} />

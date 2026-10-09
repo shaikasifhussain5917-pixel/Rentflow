@@ -58,7 +58,7 @@ export default function Payments() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 sm:space-y-8 pb-4">
       <PageHeader
         eyebrow="Finance"
         title="Payments"
@@ -70,41 +70,56 @@ export default function Payments() {
         }
       />
 
-      <div className="grid gap-5 sm:grid-cols-3">
-        <Surface elevated className="relative overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1">
-          <div className="pointer-events-none absolute -right-6 -bottom-6 size-24 rounded-full bg-emerald-500/10 blur-2xl" />
+      <div className="grid grid-cols-2 gap-3 sm:gap-5 sm:grid-cols-3">
+        <Surface elevated className="relative overflow-hidden p-4 sm:p-6 transition-all duration-300 hover:-translate-y-1">
+          <div className="pointer-events-none absolute -right-6 -bottom-6 size-16 sm:size-24 rounded-full bg-emerald-500/10 blur-xl sm:blur-2xl" />
           <StatDisplay label="Collected" value={currency(totals.collected, { compact: true })} />
         </Surface>
-        <Surface elevated className="relative overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1">
-          <div className="pointer-events-none absolute -right-6 -bottom-6 size-24 rounded-full bg-rose-500/10 blur-2xl" />
+        <Surface elevated className="relative overflow-hidden p-4 sm:p-6 transition-all duration-300 hover:-translate-y-1">
+          <div className="pointer-events-none absolute -right-6 -bottom-6 size-16 sm:size-24 rounded-full bg-rose-500/10 blur-xl sm:blur-2xl" />
           <StatDisplay
             label="Outstanding"
             value={currency(totals.outstanding, { compact: true })}
             tone={totals.outstanding > 0 ? "critical" : "default"}
             hint={
               pending.length > 0 ? (
-                <span className="font-medium text-[var(--color-warning)]">{plural(pending.length, "tenant")} pending</span>
+                <span className="font-medium text-[var(--color-warning)]">{plural(pending.length, "pending")}</span>
               ) : (
-                "All rent received"
+                "All clear"
               )
             }
           />
         </Surface>
-        <Surface elevated className="relative overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1">
-          <div className="pointer-events-none absolute -right-6 -bottom-6 size-24 rounded-full bg-blue-500/10 blur-2xl" />
+        <Surface elevated className="col-span-2 sm:col-span-1 relative overflow-hidden p-4 sm:p-6 transition-all duration-300 hover:-translate-y-1">
+          <div className="pointer-events-none absolute -right-6 -bottom-6 size-16 sm:size-24 rounded-full bg-blue-500/10 blur-xl sm:blur-2xl" />
           <StatDisplay label="Expected" value={currency(totals.expected, { compact: true })} />
         </Surface>
       </div>
 
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between pt-2 sm:pt-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <SearchField
-            containerClassName="w-full sm:w-72"
-            placeholder="Search tenant or property"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <div className="-mx-5 overflow-x-auto px-5 sm:mx-0 sm:overflow-visible sm:px-0">
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
+            <SearchField
+              containerClassName="flex-1 sm:w-72"
+              placeholder="Search tenant..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <div className="flex sm:hidden items-center rounded-[10px] border border-white/70 bg-white/60 px-2 py-1.5 backdrop-blur-md shadow-sm">
+              <Filter className="size-4 text-[var(--color-ink-faint)]" />
+              <select
+                className="w-full bg-transparent text-[13px] font-medium text-[var(--color-ink)] outline-none cursor-pointer"
+                value={monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value)}
+              >
+                <option value="all">All</option>
+                {months.map((m) => (
+                  <option key={m} value={m}>{new Date(m).toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0 scrollbar-hide">
             <Segmented<PaymentState | "all">
               label="Filter by state"
               value={filterState}
@@ -117,7 +132,7 @@ export default function Payments() {
               ]}
             />
           </div>
-          <div className="flex items-center gap-2 rounded-[12px] border border-white/70 bg-white/60 px-3 py-1.5 backdrop-blur-md shadow-sm text-sm text-[var(--color-ink-soft)]">
+          <div className="hidden sm:flex items-center gap-2 rounded-[12px] border border-white/70 bg-white/60 px-3 py-1.5 backdrop-blur-md shadow-sm text-sm text-[var(--color-ink-soft)]">
             <Filter className="size-3.5 text-[var(--color-ink-faint)]" />
             <select
               className="bg-transparent text-[13px] font-medium text-[var(--color-ink)] outline-none cursor-pointer"
@@ -134,7 +149,7 @@ export default function Payments() {
       </div>
 
       <Surface elevated className="overflow-hidden">
-        <div className="hidden grid-cols-[1.4fr_1.4fr_1fr_0.8fr_auto] gap-4 border-b border-[var(--color-line)] bg-[var(--color-surface-muted)] px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink-faint)] sm:grid">
+        <div className="hidden grid-cols-[1.4fr_1.4fr_1fr_0.8fr_auto] gap-4 border-b border-[var(--color-line)] bg-[var(--color-surface-muted)] px-5 py-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-[var(--color-ink-faint)] md:grid">
           <span>Tenant</span>
           <span>Property</span>
           <span>Method</span>
@@ -154,29 +169,38 @@ export default function Payments() {
           visiblePayments.map((p, i) => (
             <div key={p.id}>
               {i > 0 && <Divider />}
-              <div className="grid grid-cols-2 items-center gap-4 px-5 py-4 sm:grid-cols-[1.4fr_1.4fr_1fr_0.8fr_auto]">
+              <div className="grid grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:px-5 sm:py-4 md:grid-cols-[1.4fr_1.4fr_1fr_0.8fr_auto]">
                 <div className="min-w-0">
                   <Link
                     to={`/tenants/${p.tenantId}`}
-                    className="truncate text-[14px] font-medium text-[var(--color-ink)] underline-offset-4 hover:underline"
+                    className="truncate text-[13.5px] sm:text-[14px] font-semibold sm:font-medium text-[var(--color-ink)] underline-offset-4 hover:underline"
                   >
                     {p.tenant}
                   </Link>
-                  <div className="tabular text-[12px] text-[var(--color-ink-faint)] sm:hidden">
-                    {p.property} · {p.unit} · {p.date}
+                  <div className="truncate text-[12px] text-[var(--color-ink-faint)] md:hidden">
+                    {p.unit} · {new Date(p.date || p.billingMonth).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
                   </div>
                 </div>
-                <span className="hidden truncate text-[13px] text-[var(--color-ink-soft)] sm:block">
+                <span className="hidden truncate text-[13px] text-[var(--color-ink-soft)] md:block">
                   <Link to={`/properties/${p.propertyId}`} className="underline-offset-4 hover:text-[var(--color-ink)] hover:underline">
                     {p.property}
                   </Link>{" "}
                   · {p.unit}
                 </span>
-                <span className="hidden text-[13px] text-[var(--color-ink-soft)] sm:block">{p.method}</span>
-                <span className="tabular text-right text-[14px] font-semibold text-[var(--color-ink)]">
+                <span className="hidden text-[13px] text-[var(--color-ink-soft)] md:block">{p.method}</span>
+                <div className="flex flex-col items-end gap-1 md:hidden">
+                  <span className="tabular text-right text-[13.5px] font-bold text-[var(--color-ink)]">
+                    {currency(p.amount, { compact: true })}
+                  </span>
+                  <StatusBadge tone={paymentTone(p.state)} className="scale-90 origin-right">
+                    {paymentLabel(p.state)}
+                  </StatusBadge>
+                </div>
+                
+                <span className="hidden md:block tabular text-right text-[14px] font-semibold text-[var(--color-ink)]">
                   {currency(p.amount)}
                 </span>
-                <span className="col-span-2 flex w-full justify-end sm:col-span-1 sm:w-24">
+                <span className="hidden md:flex justify-end w-24">
                   <StatusBadge tone={paymentTone(p.state)} dot>
                     {paymentLabel(p.state)}
                   </StatusBadge>

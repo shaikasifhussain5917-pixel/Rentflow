@@ -265,7 +265,7 @@ function RecordRentForm({ propertyId, onClose, setIsSubmitting }: { propertyId: 
       <div className="grid grid-cols-2 gap-3">
         <Field label="Amount">
           <div className="flex h-11 items-center rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface-muted)] px-3.5 text-sm font-semibold tabular text-[var(--color-ink)]">
-            {currency(current?.unit.rent ?? 0)}
+            {currency(current?.tenant.rent ?? 0)}
           </div>
         </Field>
         <Field label="Method">
@@ -405,3 +405,128 @@ export function UpdateRentModal({ open, onClose, tenant }: { open: boolean; onCl
     </ActionModal>
   );
 }
+
+/* ------------------------------- Vacate tenant ------------------------------- */
+
+export function VacateTenantModal({ open, onClose, tenant }: { open: boolean; onClose: () => void; tenant: Tenant | null }) {
+  const { vacateTenant } = usePortfolio();
+  const [vacatingDate, setVacatingDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setVacatingDate(new Date().toISOString().split('T')[0]);
+      setError("");
+    }
+  }, [open]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!tenant) return;
+    if (!vacatingDate) {
+      setError("Please select a vacating date.");
+      return;
+    }
+    if (vacatingDate < tenant.since) {
+      setError(`Vacating date cannot be before move-in date (${new Date(tenant.since).toLocaleDateString()}).`);
+      return;
+    }
+    
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await vacateTenant(tenant.id, vacatingDate);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "An error occurred while vacating tenant.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!tenant) return null;
+
+  return (
+    <ActionModal isSubmitting={isSubmitting} open={open} onClose={onClose} title="Vacate Tenant" description="Mark this tenant as vacated and free up the unit." formId="vacate-form" submitLabel={isSubmitting ? "Vacating..." : "Confirm Vacate"}>
+      <form id="vacate-form" onSubmit={submit} className="space-y-4">
+        <div className="rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface-muted)] p-4 text-sm">
+          <div className="font-semibold text-[var(--color-ink)]">{tenant.name}</div>
+          <div className="text-[var(--color-ink-soft)] mt-1">{tenant.property} · {tenant.unit}</div>
+          <div className="text-[var(--color-ink-soft)] mt-1">Monthly rent: {currency(tenant.rent)}</div>
+          <div className="text-[var(--color-ink-soft)] mt-1">Move-in date: {new Date(tenant.since).toLocaleDateString()}</div>
+        </div>
+        
+        <Field label="Vacating Date" error={error}>
+          <input 
+            type="date" 
+            value={vacatingDate}
+            onChange={(e) => { setVacatingDate(e.target.value); setError(""); }}
+            className="flex h-11 w-full rounded-[10px] border border-[var(--color-line)] bg-transparent px-3 text-[14px] text-[var(--color-ink)] outline-none transition-colors placeholder:text-[var(--color-ink-faint)] hover:border-[var(--color-line-heavy)] focus:border-[var(--color-ink)]"
+          />
+        </Field>
+      </form>
+    </ActionModal>
+  );
+}
+
+/* ------------------------------- Edit tenant rent ------------------------------- */
+
+export function EditTenantRentModal({ open, onClose, tenant }: { open: boolean; onClose: () => void; tenant: Tenant | null }) {
+  const { updateTenantRent } = usePortfolio();
+  const [rent, setRent] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (open && tenant) {
+      setRent(String(tenant.rent));
+      setError("");
+    }
+  }, [open, tenant]);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!tenant) return;
+    
+    const newRent = Number(rent);
+    if (!rent || isNaN(newRent) || newRent <= 0) {
+      setError("Please enter a valid positive amount.");
+      return;
+    }
+    
+    setIsSubmitting(true);
+    setError("");
+    try {
+      await updateTenantRent(tenant.id, newRent);
+      onClose();
+    } catch (err: any) {
+      setError(err.message || "An error occurred while updating rent.");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (!tenant) return null;
+
+  return (
+    <ActionModal isSubmitting={isSubmitting} open={open} onClose={onClose} title="Edit Monthly Rent" description="Update the agreed monthly rent for this tenancy." formId="edit-rent-form" submitLabel={isSubmitting ? "Saving..." : "Save Changes"}>
+      <form id="edit-rent-form" onSubmit={submit} className="space-y-4">
+        <div className="rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface-muted)] p-4 text-sm">
+          <div className="font-semibold text-[var(--color-ink)]">{tenant.name}</div>
+          <div className="text-[var(--color-ink-soft)] mt-1">{tenant.property} · {tenant.unit}</div>
+        </div>
+        
+        <Field label="Monthly rent" error={error}>
+          <TextInput 
+            value={rent}
+            onChange={(e) => { setRent(e.target.value); setError(""); }}
+            inputMode="numeric"
+            autoFocus
+          />
+        </Field>
+      </form>
+    </ActionModal>
+  );
+}
+

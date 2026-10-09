@@ -7,6 +7,7 @@ import { Divider } from "../ui/Divider";
 import { Avatar } from "../ui/Avatar";
 import { Dropdown } from "../ui/Dropdown";
 import { useAuth } from "../../contexts/AuthContext";
+import { usePortfolio } from "../../data/PortfolioContext";
 
 function NavRow({ item }: { item: NavItem }) {
   const Icon = item.icon;
@@ -50,7 +51,9 @@ function NavRow({ item }: { item: NavItem }) {
 
 export function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
   const { user, profile } = useAuth();
+  const { tenants } = usePortfolio();
   const userName = profile?.full_name || user?.email || "User";
+  const unpaidCount = tenants.filter((t) => t.status === "active" && t.state !== "paid").length;
 
   return (
     <aside className="relative z-10 flex h-full w-[264px] shrink-0 flex-col border-r border-[var(--color-line)] bg-[var(--color-surface)] backdrop-blur-2xl">
@@ -63,7 +66,7 @@ export function Sidebar({ onSignOut }: { onSignOut?: () => void }) {
           Property Management
         </p>
         {primaryNav.map((item) => (
-          <NavRow key={item.to} item={item} />
+          <NavRow key={item.to} item={{ ...item, badge: item.to === "/payments" && unpaidCount > 0 ? unpaidCount.toString() : item.badge }} />
         ))}
 
         <div className="px-2 py-3">

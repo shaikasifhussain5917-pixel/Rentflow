@@ -1,9 +1,10 @@
-import { Navigate, Outlet } from "react-router-dom";
+import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { BrandMark } from "./BrandMark";
 
 export function ProtectedRoute() {
-  const { user, isLoading } = useAuth();
+  const { user, profile, isLoading } = useAuth();
+  const location = useLocation();
 
   if (isLoading) {
     return (
@@ -18,6 +19,14 @@ export function ProtectedRoute() {
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (profile && !profile.setup_completed && location.pathname !== "/setup") {
+    return <Navigate to="/setup" replace />;
+  }
+
+  if (profile && profile.setup_completed && location.pathname === "/setup") {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <Outlet />;

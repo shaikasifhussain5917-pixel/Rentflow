@@ -1,4 +1,5 @@
-import { Bell, Command } from "lucide-react";
+import { ArrowLeft, Bell, Command } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { BrandMark } from "./BrandMark";
 import { SearchField } from "../ui/SearchField";
 import { IconButton } from "../ui/IconButton";
@@ -11,9 +12,33 @@ import { useLocalTime } from "../../hooks/useLocalTime";
 export function Topbar({ onSignOut }: { onSignOut?: () => void }) {
   const { user, profile } = useAuth();
   const { formattedDate } = useLocalTime();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleBack = () => {
+    const hasHistory = window.history.state && window.history.state.idx > 0;
+    if (hasHistory) {
+      navigate(-1);
+    } else {
+      navigate("/dashboard");
+    }
+  };
+
+  const isDashboard = location.pathname === "/dashboard" || location.pathname === "/";
+
   return (
     <header className="sticky top-0 z-30 border-b border-[var(--color-line)] bg-[var(--color-canvas)]/85 backdrop-blur-md">
-      <div className="flex h-16 items-center gap-4 px-5 sm:px-8">
+      <div className="flex h-16 items-center gap-3 px-4 sm:gap-4 sm:px-8">
+        {!isDashboard && (
+          <button
+            onClick={handleBack}
+            className="flex lg:hidden size-[44px] shrink-0 items-center justify-center rounded-[12px] border border-[var(--color-line-strong)] bg-white/70 text-[var(--color-ink)] shadow-[0_1px_2px_rgba(0,0,0,0.03)] backdrop-blur-md transition-all active:scale-95 active:bg-white"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="size-5 stroke-[1.7]" />
+          </button>
+        )}
+
         {/* Mobile brand */}
         <div className="lg:hidden">
           <BrandMark compact />

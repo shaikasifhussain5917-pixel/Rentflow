@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { cn } from "../../utils/cn";
 import { IconButton } from "./IconButton";
@@ -29,7 +30,7 @@ export function Modal({ open, onClose, title, description, children, footer, cla
 
   if (!open) return null;
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-end justify-center sm:items-center sm:p-4">
       <div
         className="animate-fade-in absolute inset-0 bg-slate-900/30 backdrop-blur-[6px] transition-opacity"
@@ -39,7 +40,7 @@ export function Modal({ open, onClose, title, description, children, footer, cla
         role="dialog"
         aria-modal="true"
         className={cn(
-          "animate-sheet-in relative z-10 flex max-h-[92dvh] w-full max-w-lg flex-col overflow-hidden rounded-t-[24px] border border-white/80 bg-white/90 backdrop-blur-2xl shadow-[var(--shadow-panel),0_0_0_1px_rgba(255,255,255,0.8)] sm:rounded-[24px]",
+          "animate-sheet-in relative z-10 flex max-h-[92dvh] w-[calc(100vw-16px)] max-w-lg flex-col overflow-hidden rounded-t-[24px] border border-white/80 bg-white/90 backdrop-blur-2xl shadow-[var(--shadow-panel),0_0_0_1px_rgba(255,255,255,0.8)] sm:w-full sm:rounded-[24px]",
           className,
         )}
       >
@@ -62,11 +63,12 @@ export function Modal({ open, onClose, title, description, children, footer, cla
         )}
         {children && <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">{children}</div>}
         {footer && (
-          <div className="flex shrink-0 justify-end gap-3 border-t border-white/60 bg-white/50 px-6 py-4 backdrop-blur-md">
+          <div className="flex shrink-0 justify-end gap-3 border-t border-white/60 bg-white/50 px-6 py-4 pb-[calc(1rem+env(safe-area-inset-bottom))] sm:pb-4 backdrop-blur-md">
             {footer}
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

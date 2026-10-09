@@ -13,7 +13,7 @@ export function AppShell() {
   const { signOut } = useAuth();
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[var(--color-canvas)] relative">
+    <div className="flex h-screen overflow-hidden overflow-x-hidden bg-[var(--color-canvas)] relative">
       {/* Liquid glass mesh background effect */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-[10%] top-[-10%] h-[40%] w-[40%] rounded-full bg-blue-400/10 blur-[100px]" />

@@ -175,7 +175,7 @@ export function PropertyFormModal(props: Props) {
       onClose={onClose}
       title={mode === "add" ? "Add property" : "Edit property"}
       description={mode === "add" ? "Add a property and its units to your portfolio." : "Update the details of this property."}
-      className="sm:max-w-[42rem] max-h-[90vh]"
+      className="sm:max-w-[42rem] sm:max-h-[90vh]"
       footer={
         <>
           <Button variant="secondary" type="button" onClick={onClose} disabled={isSubmitting}>

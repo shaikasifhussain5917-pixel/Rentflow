@@ -16,9 +16,10 @@ interface DropdownProps {
   items: DropdownItem[];
   align?: "left" | "right";
   className?: string;
+  menuClassName?: string;
 }
 
-export function Dropdown({ trigger, items, align = "right", className }: DropdownProps) {
+export function Dropdown({ trigger, items, align = "right", className, menuClassName }: DropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -38,8 +39,9 @@ export function Dropdown({ trigger, items, align = "right", className }: Dropdow
       {open && (
         <div
           className={cn(
-            "animate-sheet-in absolute z-50 mt-2 min-w-[200px] overflow-hidden rounded-[14px] border border-white/80 bg-white/90 p-1.5 shadow-[var(--shadow-panel)] backdrop-blur-2xl",
+            "animate-sheet-in absolute z-50 mt-2 min-w-[200px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[14px] border border-white/80 bg-white/90 p-1.5 shadow-[var(--shadow-panel)] backdrop-blur-2xl",
             align === "right" ? "right-0" : "left-0",
+            menuClassName
           )}
         >
           {items.map((item, i) => (

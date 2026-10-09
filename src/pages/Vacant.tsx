@@ -43,9 +43,9 @@ export default function Vacant() {
       ) : (
         <div className="grid gap-5 lg:grid-cols-2">
           {open.map(({ unit, property: p }) => (
-            <Surface key={unit.id} elevated className="flex gap-4 p-3">
-              <PropertyThumbnail src={p.image} alt={p.name} ratio="square" className="w-28 shrink-0 sm:w-36" />
-              <div className="flex min-w-0 flex-1 flex-col justify-between py-1 pr-2">
+            <Surface key={unit.id} elevated className="flex gap-3 p-3 sm:gap-4">
+              <PropertyThumbnail src={p.image} alt={p.name} ratio="square" className="w-24 shrink-0 sm:w-36" />
+              <div className="flex min-w-0 flex-1 flex-col justify-between py-1 pr-1 sm:pr-2">
                 <div>
                   <div className="flex items-start justify-between gap-3">
                     <Link

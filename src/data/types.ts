@@ -58,7 +58,16 @@ export interface Tenant {
   since: string;
   rent: number;
   state: PaymentState;
-  status?: string;
+  status: "active" | "vacated";
+  vacatedOn?: string;
+}
+
+export interface TenantNote {
+  id: string;
+  tenantId: string;
+  content: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Payment {
@@ -76,6 +85,7 @@ export interface Payment {
   state: PaymentState;
   reference?: string;
   notes?: string;
+  recordedAt?: string;
 }
 
 export interface ActivityItem {

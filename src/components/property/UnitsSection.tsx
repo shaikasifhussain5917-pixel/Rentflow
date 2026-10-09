@@ -40,7 +40,7 @@ function OccupiedRow({ unit, tenant }: { unit: Unit; tenant?: Tenant }) {
         {tenant && <div className="mt-0.5 text-[12px] text-[var(--color-ink-faint)]">Since {tenant.since}</div>}
       </div>
       <div className="tabular order-4 text-right text-[14.5px] font-semibold text-[var(--color-ink)] md:order-none">
-        {currency(unit.rent)}
+        {currency(tenant ? tenant.rent : unit.rent)}
         <span className="text-[11.5px] font-normal text-[var(--color-ink-faint)]"> /mo</span>
       </div>
       <div className="order-2 flex justify-end md:order-none">

@@ -37,7 +37,7 @@ export default function Dashboard() {
     : 0;
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-6 sm:space-y-10 pb-20 sm:pb-0">
       <PageHeader
         eyebrow="Portfolio overview"
         title={`${greeting}, ${userName}`}
@@ -55,10 +55,10 @@ export default function Dashboard() {
       />
 
       {/* Asymmetric summary — one hero panel + supporting metrics */}
-      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
-        <Surface elevated className="relative flex flex-col justify-between overflow-hidden p-7 bg-gradient-to-br from-white/95 via-white/80 to-[#fdf7f3]/80">
-          <div className="pointer-events-none absolute -right-12 -top-12 size-48 rounded-full bg-[var(--color-accent)]/12 blur-3xl" />
-          <div className="relative z-10 flex items-start justify-between">
+      <div className="grid gap-4 sm:gap-5 lg:grid-cols-[1.4fr_1fr]">
+        <Surface elevated className="relative flex flex-col justify-between overflow-hidden p-5 sm:p-7 bg-gradient-to-br from-white/95 via-white/80 to-[#fdf7f3]/80">
+          <div className="pointer-events-none absolute -right-12 -top-12 size-32 sm:size-48 rounded-full bg-[var(--color-accent)]/12 blur-2xl sm:blur-3xl" />
+          <div className="relative z-10 flex flex-wrap items-start justify-between gap-3">
             <StatDisplay
               size="lg"
               label="Collected this month"
@@ -75,7 +75,7 @@ export default function Dashboard() {
             </StatusBadge>
           </div>
 
-          <div className="relative z-10 mt-8">
+          <div className="relative z-10 mt-6 sm:mt-8">
             <div className="mb-2 flex items-center justify-between text-[12.5px] text-[var(--color-ink-soft)]">
               <span>Collection progress</span>
               <span className="tabular font-semibold text-[var(--color-ink)]">{collectedPct}%</span>
@@ -89,40 +89,40 @@ export default function Dashboard() {
           </div>
         </Surface>
 
-        <div className="grid grid-cols-2 gap-5">
-          <Surface elevated className="relative overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1">
-            <div className="pointer-events-none absolute -right-6 -bottom-6 size-24 rounded-full bg-blue-500/8 blur-2xl" />
+        <div className="grid grid-cols-2 gap-3 sm:gap-5">
+          <Surface elevated className="relative overflow-hidden p-4 sm:p-6 transition-all duration-300 hover:-translate-y-1">
+            <div className="pointer-events-none absolute -right-6 -bottom-6 size-16 sm:size-24 rounded-full bg-blue-500/8 blur-xl sm:blur-2xl" />
             <StatDisplay label="Properties" value={portfolioStats.properties} unit="active" />
           </Surface>
-          <Surface elevated className="relative overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1">
-            <div className="pointer-events-none absolute -right-6 -bottom-6 size-24 rounded-full bg-indigo-500/8 blur-2xl" />
+          <Surface elevated className="relative overflow-hidden p-4 sm:p-6 transition-all duration-300 hover:-translate-y-1">
+            <div className="pointer-events-none absolute -right-6 -bottom-6 size-16 sm:size-24 rounded-full bg-indigo-500/8 blur-xl sm:blur-2xl" />
             <StatDisplay label="Total units" value={portfolioStats.units} />
           </Surface>
-          <Surface elevated className="relative overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1">
-            <div className="pointer-events-none absolute -right-6 -bottom-6 size-24 rounded-full bg-emerald-500/10 blur-2xl" />
+          <Surface elevated className="relative overflow-hidden p-4 sm:p-6 transition-all duration-300 hover:-translate-y-1">
+            <div className="pointer-events-none absolute -right-6 -bottom-6 size-16 sm:size-24 rounded-full bg-emerald-500/10 blur-xl sm:blur-2xl" />
             <StatDisplay label="Occupancy" value={portfolioStats.occupancy} unit="%" />
           </Surface>
-          <Surface elevated className="relative overflow-hidden p-6 transition-all duration-300 hover:-translate-y-1">
-            <div className="pointer-events-none absolute -right-6 -bottom-6 size-24 rounded-full bg-amber-500/10 blur-2xl" />
+          <Surface elevated className="relative overflow-hidden p-4 sm:p-6 transition-all duration-300 hover:-translate-y-1">
+            <div className="pointer-events-none absolute -right-6 -bottom-6 size-16 sm:size-24 rounded-full bg-amber-500/10 blur-xl sm:blur-2xl" />
             <StatDisplay
               label="Vacant"
               value={portfolioStats.vacant}
-              hint={<span className="font-medium text-[var(--color-warning)]">Needs attention</span>}
+              hint={<span className="font-medium text-[var(--color-warning)] mt-0.5 block">Needs attention</span>}
             />
           </Surface>
         </div>
       </div>
 
       {/* Two-column secondary — recent tenants + activity */}
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 sm:gap-5 lg:grid-cols-2">
         <Surface elevated>
-          <div className="px-5 pt-5">
+          <div className="px-4 pt-4 sm:px-5 sm:pt-5">
             <SectionHeader
               title="Rent status"
               count={tenants.length}
               action={
                 <Button variant="ghost" size="sm" iconRight={<ArrowUpRight />} onClick={() => window.location.hash = '#/tenants'}>
-                  All tenants
+                  All
                 </Button>
               }
             />
@@ -130,8 +130,8 @@ export default function Dashboard() {
           <div className="mt-2">
             {tenants.slice(0, 4).map((t, i) => (
               <div key={t.id}>
-                {i > 0 && <Divider className="mx-5" />}
-                <div className="flex items-center gap-3.5 px-5 py-3.5">
+                {i > 0 && <Divider className="mx-4 sm:mx-5" />}
+                <div className="flex items-center gap-3 px-4 py-3 sm:gap-3.5 sm:px-5 sm:py-3.5">
                   <Avatar name={t.name} size="md" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-[14px] font-medium text-[var(--color-ink)]">
@@ -160,11 +160,11 @@ export default function Dashboard() {
         </Surface>
 
         <Surface elevated>
-          <div className="px-5 pt-5">
+          <div className="px-4 pt-4 sm:px-5 sm:pt-5">
             <SectionHeader title="Recent activity" />
           </div>
-          <div className="mt-4 px-5 pb-5">
-            <ol className="relative space-y-5 before:absolute before:left-[5px] before:top-1.5 before:h-[calc(100%-1rem)] before:w-px before:bg-[var(--color-line)]">
+          <div className="mt-3 px-4 pb-4 sm:mt-4 sm:px-5 sm:pb-5">
+            <ol className="relative space-y-4 sm:space-y-5 before:absolute before:left-[5px] before:top-1.5 before:h-[calc(100%-1rem)] before:w-px before:bg-[var(--color-line)]">
               {activity.map((a) => (
                 <li key={a.id} className="relative flex gap-4 pl-6">
                   <span className="absolute left-0 top-1.5 size-[11px] rounded-full border-2 border-[var(--color-surface)] bg-[var(--color-accent-soft)] ring-1 ring-[var(--color-line)]" />

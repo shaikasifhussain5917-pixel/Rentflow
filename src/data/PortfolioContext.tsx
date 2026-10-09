@@ -11,6 +11,7 @@ import {
   type PropertyType,
   type Tenant,
   type Unit,
+  type TenantNote,
 } from "./types";
 import { currency } from "../utils/format";
 import { supabase } from "../lib/supabase";
@@ -35,6 +36,7 @@ interface PortfolioContextValue {
   properties: Property[];
   units: Unit[];
   tenants: Tenant[];
+  tenantNotes: TenantNote[];
   payments: Payment[];
   activity: ActivityItem[];
   isLoading: boolean;
@@ -46,6 +48,11 @@ interface PortfolioContextValue {
   resolveMaintenance: (unitId: string) => void;
   addExpense: (propertyId: string, input: { category: string; amount: number; note: string }) => Promise<void>;
   updateRentStatus: (tenantId: string, isPaid: boolean) => Promise<void>;
+  vacateTenant: (tenantId: string, vacatingDate: string) => Promise<void>;
+  updateTenantRent: (tenantId: string, newRent: number) => Promise<void>;
+  addTenantNote: (tenantId: string, content: string) => Promise<void>;
+  updateTenantNote: (id: string, content: string) => Promise<void>;
+  deleteTenantNote: (id: string) => Promise<void>;
   deleteProperty: (propertyId: string) => Promise<void>;
 }
 
@@ -101,7 +108,8 @@ const mapTenant = (row: any): Tenant => ({
   since: row.lease_start || row.since || "Recent",
   rent: row.monthly_rent || row.rent,
   state: row.payment_state || row.state || "due",
-  status: row.status,
+  status: row.status as "active" | "vacated",
+  vacatedOn: row.vacated_on,
 });
 
 const mapPayment = (row: any): Payment => ({
@@ -119,6 +127,7 @@ const mapPayment = (row: any): Payment => ({
   state: row.state as PaymentState,
   reference: row.reference,
   notes: row.notes,
+  recordedAt: row.recorded_at,
 });
 
 const mapActivity = (row: any): ActivityItem => {
@@ -138,12 +147,21 @@ const mapActivity = (row: any): ActivityItem => {
   };
 };
 
+const mapTenantNote = (row: any): TenantNote => ({
+  id: row.id,
+  tenantId: row.tenant_id,
+  content: row.content,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+});
+
 export function PortfolioProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   
   const [properties, setProperties] = useState<Property[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
   const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [tenantNotes, setTenantNotes] = useState<TenantNote[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   
   const [activity, setActivity] = useState<ActivityItem[]>([]);
@@ -154,6 +172,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setProperties([]);
       setUnits([]);
       setTenants([]);
+      setTenantNotes([]);
       setPayments([]);
       setActivity([]);
       setIsLoading(false);
@@ -162,10 +181,11 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     
     setIsLoading(true);
     try {
-      const [propsRes, unitsRes, tenantsRes, paymentsRes, activitiesRes] = await Promise.all([
+      const [propsRes, unitsRes, tenantsRes, notesRes, paymentsRes, activitiesRes] = await Promise.all([
         supabase.from("properties").select("*").order("created_at", { ascending: false }),
         supabase.from("units").select("*").order("created_at", { ascending: false }),
         supabase.from("tenants").select("*, units(number, properties(name))").order("created_at", { ascending: false }),
+        supabase.from("tenant_notes").select("*").order("created_at", { ascending: false }),
         supabase.from("payments").select("*, tenants(name, units(number, properties(name)))").order("payment_date", { ascending: false }),
         supabase.from("activities").select("*").order("created_at", { ascending: false }).limit(100),
       ]);
@@ -173,6 +193,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       if (propsRes.error) throw propsRes.error;
       if (unitsRes.error) throw unitsRes.error;
       if (tenantsRes.error) throw tenantsRes.error;
+      if (notesRes.error) throw notesRes.error;
       if (paymentsRes.error) throw paymentsRes.error;
       if (activitiesRes.error) throw activitiesRes.error;
       
@@ -194,13 +215,45 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         const currentPayment = paymentsRes.data.find(
           (p: any) => p.tenant_id === tenant.id && p.billing_month === currentBillingMonth
         );
-        tenant.state = currentPayment?.state === "paid" ? "paid" : "due";
+        
+        const method = profile?.rent_collection_method || "prepaid";
+        const dueDay = profile?.default_due_day || 1;
+        const grace = profile?.grace_period_days || 0;
+        
+        let deadlineDate = new Date(currentBillingMonth);
+        if (method === "postpaid") {
+          deadlineDate.setMonth(deadlineDate.getMonth() + 1);
+        }
+        deadlineDate.setDate(dueDay);
+        deadlineDate.setDate(deadlineDate.getDate() + grace);
+        
+        // Ensure midnight for comparison
+        deadlineDate.setHours(23, 59, 59, 999);
+        const isOverdue = today > deadlineDate;
+
+        const tenantStartMonth = new Date(tenant.since).toISOString().substring(0, 7) + "-01";
+
+        if (tenant.status === "vacated" && tenant.vacatedOn) {
+          const vacatedMonth = tenant.vacatedOn.substring(0, 7) + "-01";
+          if (currentBillingMonth > vacatedMonth) {
+            // After they vacate, they do not owe rent for future months
+            tenant.state = "paid"; // Or we could use a different state, but 'paid' prevents it from showing as 'due'
+          } else {
+            tenant.state = currentPayment?.state === "paid" ? "paid" : isOverdue ? "overdue" : "due";
+          }
+        } else if (currentBillingMonth < tenantStartMonth) {
+          // Do not charge a new tenant for periods before their tenancy begins
+          tenant.state = "paid";
+        } else {
+          tenant.state = currentPayment?.state === "paid" ? "paid" : isOverdue ? "overdue" : "due";
+        }
         return tenant;
       });
 
       setProperties(propsRes.data.map(mapProperty));
       setUnits(localUnits);
       setTenants(mappedTenants);
+      setTenantNotes(notesRes.data.map(mapTenantNote));
       setPayments(paymentsRes.data.map(mapPayment));
       setActivity(activitiesRes.data.map(mapActivity));
     } catch (err: any) {
@@ -214,7 +267,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [user]);
+  }, [user, profile]);
 
   useEffect(() => {
     fetchPortfolio();
@@ -463,11 +516,12 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           property_id: tenant.propertyId,
           unit_id: unitId,
           tenant_id: tenant.id,
-          amount: unit.rent,
+          amount: tenant.rent,
           payment_date: today.toISOString().split('T')[0],
           billing_month: billingMonth,
           method,
-          state: "paid"
+          state: "paid",
+          recorded_at: today.toISOString(),
         }, { onConflict: "tenant_id, billing_month" });
 
         if (paymentError) throw paymentError;
@@ -475,7 +529,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
         
         await fetchPortfolio();
-        log(unit.propertyId, "payment", `${currency(unit.rent)} rent received`, `Unit ${unit.number} · ${tenant.name}`);
+        log(unit.propertyId, "payment", `${currency(tenant.rent)} rent received`, `Unit ${unit.number} · ${tenant.name}`);
       } catch (err) {
         console.error("Error recording rent:", err);
         throw err;
@@ -500,7 +554,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
           property_id: tenant.propertyId,
           unit_id: unit.id,
           tenant_id: tenant.id,
-          amount: unit.rent,
+          amount: tenant.rent,
           billing_month: billingMonth,
           state: isPaid ? "paid" : "due",
         };
@@ -508,9 +562,18 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         if (isPaid) {
           payload.payment_date = today.toISOString().split("T")[0];
           payload.method = "UPI"; // fallback/default
+          
+          // Only update recorded_at if it's currently unpaid, otherwise keep original.
+          // Wait, the upsert will overwrite. Since we do a full upsert, we need to grab the existing `recorded_at`.
+          // We can check the existing payment from the `payments` state!
+          const existingPayment = payments.find(p => p.tenantId === tenant.id && p.billingMonth === billingMonth);
+          payload.recorded_at = (existingPayment?.state === "paid" && existingPayment.recordedAt) 
+            ? existingPayment.recordedAt 
+            : new Date().toISOString();
         } else {
           payload.payment_date = null;
           payload.method = null;
+          payload.recorded_at = null;
         }
 
         const { error: paymentError } = await supabase
@@ -521,10 +584,45 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
         await fetchPortfolio();
         if (isPaid) {
-          log(tenant.propertyId, "payment", `${currency(unit.rent)} rent received`, `Unit ${unit.number} · ${tenant.name}`);
+          log(tenant.propertyId, "payment", `${currency(tenant.rent)} rent received`, `Unit ${unit.number} · ${tenant.name}`);
         }
       } catch (err) {
         console.error("Error updating rent status:", err);
+        throw err;
+      }
+    },
+    [user, tenants, units, fetchPortfolio, log],
+  );
+
+  const vacateTenant = useCallback<PortfolioContextValue["vacateTenant"]>(
+    async (tenantId, vacatingDate) => {
+      if (!user) return;
+      const tenant = tenants.find((t) => t.id === tenantId);
+      const unit = units.find((u) => u.id === tenant?.unitId);
+      if (!tenant || !unit) return;
+
+      try {
+        const { error: tenantError } = await supabase
+          .from("tenants")
+          .update({ status: "vacated", vacated_on: vacatingDate })
+          .eq("id", tenantId)
+          .eq("owner_id", user.id);
+
+        if (tenantError) throw tenantError;
+
+        // Mark the unit as vacant since this tenant is leaving.
+        const { error: unitError } = await supabase
+          .from("units")
+          .update({ status: "vacant", vacant_days: 0 })
+          .eq("id", unit.id)
+          .eq("owner_id", user.id);
+
+        if (unitError) throw unitError;
+
+        await fetchPortfolio();
+        log(tenant.propertyId, "vacancy", `Unit ${unit.number} vacated`, `${tenant.name} moved out`);
+      } catch (err) {
+        console.error("Error vacating tenant:", err);
         throw err;
       }
     },
@@ -578,11 +676,91 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     [user, log],
   );
 
+  const updateTenantRent = useCallback<PortfolioContextValue["updateTenantRent"]>(
+    async (tenantId, newRent) => {
+      if (!user) return;
+      if (newRent <= 0 || isNaN(newRent)) throw new Error("Invalid rent amount");
+      
+      const tenant = tenants.find((t) => t.id === tenantId);
+      if (!tenant || tenant.status === "vacated") throw new Error("Cannot edit rent for a vacated tenant");
+
+      try {
+        const { error } = await supabase
+          .from("tenants")
+          .update({ monthly_rent: newRent })
+          .eq("id", tenantId)
+          .eq("owner_id", user.id);
+
+        if (error) throw error;
+        await fetchPortfolio();
+        log(tenant.propertyId, "lease", `Rent updated`, `${tenant.name} · ${currency(newRent)} / month`);
+      } catch (err) {
+        console.error("Error updating tenant rent:", err);
+        throw err;
+      }
+    },
+    [user, tenants, fetchPortfolio, log],
+  );
+
+  const addTenantNote = useCallback<PortfolioContextValue["addTenantNote"]>(
+    async (tenantId, content) => {
+      if (!user) return;
+      try {
+        const { error } = await supabase.from("tenant_notes").insert({
+          owner_id: user.id,
+          tenant_id: tenantId,
+          content: content.trim(),
+        });
+        if (error) throw error;
+        await fetchPortfolio();
+      } catch (err) {
+        console.error("Add tenant note error:", err);
+        throw err;
+      }
+    },
+    [user, fetchPortfolio],
+  );
+
+  const updateTenantNote = useCallback<PortfolioContextValue["updateTenantNote"]>(
+    async (id, content) => {
+      if (!user) return;
+      try {
+        const { error } = await supabase.from("tenant_notes").update({
+          content: content.trim(),
+          updated_at: new Date().toISOString(),
+        }).eq("id", id).eq("owner_id", user.id);
+        
+        if (error) throw error;
+        await fetchPortfolio();
+      } catch (err) {
+        console.error("Update tenant note error:", err);
+        throw err;
+      }
+    },
+    [user, fetchPortfolio],
+  );
+
+  const deleteTenantNote = useCallback<PortfolioContextValue["deleteTenantNote"]>(
+    async (id) => {
+      if (!user) return;
+      try {
+        const { error } = await supabase.from("tenant_notes").delete().eq("id", id).eq("owner_id", user.id);
+        if (error) throw error;
+        await fetchPortfolio();
+      } catch (err) {
+        console.error("Delete tenant note error:", err);
+        throw err;
+      }
+    },
+    [user, fetchPortfolio],
+  );
+
   const value = useMemo(
     () => ({
       properties,
       units,
       tenants,
+      tenantNotes,
       payments,
       activity,
       isLoading,
@@ -594,9 +772,14 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       resolveMaintenance,
       addExpense,
       updateRentStatus,
+      vacateTenant,
+      updateTenantRent,
+      addTenantNote,
+      updateTenantNote,
+      deleteTenantNote,
       deleteProperty,
     }),
-    [properties, units, tenants, payments, activity, isLoading, addProperty, updateProperty, addUnit, assignTenant, recordRent, resolveMaintenance, addExpense, updateRentStatus, deleteProperty],
+    [properties, units, tenants, tenantNotes, payments, activity, isLoading, addProperty, updateProperty, addUnit, assignTenant, recordRent, resolveMaintenance, addExpense, updateRentStatus, vacateTenant, updateTenantRent, addTenantNote, updateTenantNote, deleteTenantNote, deleteProperty],
   );
 
   return <PortfolioContext.Provider value={value}>{children}</PortfolioContext.Provider>;

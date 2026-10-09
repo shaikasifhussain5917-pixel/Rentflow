@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ChevronLeft, Mail, Phone, Users } from "lucide-react";
+import { ChevronLeft, Mail, Phone, Users, Pencil } from "lucide-react";
 import { usePortfolio } from "../data/PortfolioContext";
 import { unitLabel } from "../data/selectors";
 import { currency, paymentLabel, paymentTone } from "../utils/format";
-import { UpdateRentModal } from "../components/property/UnitModals";
+import { TenantNotes } from "../components/property/TenantNotes";
+import { UpdateRentModal, VacateTenantModal, EditTenantRentModal } from "../components/property/UnitModals";
 import { PageHeader } from "../components/ui/PageHeader";
 import { Surface } from "../components/ui/Surface";
 import { StatDisplay } from "../components/ui/StatDisplay";
@@ -18,6 +19,8 @@ export default function TenantDetail() {
   const { tenantId } = useParams();
   const { tenants, payments, isLoading } = usePortfolio();
   const [editingRent, setEditingRent] = useState(false);
+  const [editingAgreedRent, setEditingAgreedRent] = useState(false);
+  const [vacating, setVacating] = useState(false);
   const tenant = tenants.find((t) => t.id === tenantId);
 
   if (isLoading && !tenant) {
@@ -54,7 +57,7 @@ export default function TenantDetail() {
   const currentStatus = currentPayment?.state === "paid" ? "paid" : "due";
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-8 pb-24 sm:pb-0">
       <div className="space-y-6">
         <nav className="flex items-center gap-1.5 text-[13px] text-[var(--color-ink-faint)]">
           <Link to="/tenants" className="-ml-1 inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors hover:text-[var(--color-ink)]">
@@ -76,63 +79,101 @@ export default function TenantDetail() {
             </span>
           }
           actions={
-            <button
-              onClick={() => setEditingRent(true)}
-              className="cursor-pointer transition-opacity hover:opacity-80"
-            >
-              <StatusBadge tone={paymentTone(currentStatus)} dot>
-                Rent {paymentLabel(currentStatus).toLowerCase()}
-              </StatusBadge>
-            </button>
+            <div className="flex items-center gap-3">
+              {tenant.status === "vacated" ? (
+                <span className="inline-flex items-center rounded-full bg-red-50 px-2.5 py-1 text-[12px] font-bold uppercase tracking-wider text-red-700 ring-1 ring-inset ring-red-200">
+                  Vacated
+                </span>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setEditingRent(true)}
+                    className="cursor-pointer transition-opacity hover:opacity-80"
+                  >
+                    <StatusBadge tone={paymentTone(currentStatus)} dot>
+                      Rent {paymentLabel(currentStatus).toLowerCase()}
+                    </StatusBadge>
+                  </button>
+                  <Button size="sm" variant="secondary" onClick={() => setVacating(true)}>
+                    Vacate
+                  </Button>
+                </>
+              )}
+            </div>
           }
         />
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-[1.2fr_1fr]">
-        <Surface elevated className="p-6 sm:p-7 space-y-6">
-          <StatDisplay size="lg" label="Monthly rent" value={currency(tenant.rent)} hint={`${unitLabel(tenant.unit)} · ${tenant.property}`} />
+      <div className="grid gap-3 sm:gap-5 lg:grid-cols-[1.2fr_1fr]">
+        <Surface elevated className="p-4 sm:p-7 space-y-4 sm:space-y-6">
+          <div className="flex items-start justify-between">
+            <StatDisplay size="lg" label="Monthly rent" value={currency(tenant.rent)} hint={`${unitLabel(tenant.unit)} · ${tenant.property}`} />
+            {tenant.status === "active" && (
+              <Button size="sm" variant="ghost" icon={<Pencil className="size-4" />} onClick={() => setEditingAgreedRent(true)}>
+                Edit
+              </Button>
+            )}
+          </div>
           <div className="rounded-xl border border-[var(--color-line)] bg-[var(--color-surface-muted)] p-4">
-            <div className="flex items-start justify-between">
+            {tenant.status === "vacated" && tenant.vacatedOn ? (
               <div className="space-y-1">
                 <div className="text-[12px] font-medium uppercase tracking-wide text-[var(--color-ink-faint)]">
-                  {monthName}
+                  Tenancy Ended
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[15px] font-semibold text-[var(--color-ink)]">{currency(tenant.rent)}</span>
-                  <StatusBadge tone={paymentTone(currentStatus)} dot>{paymentLabel(currentStatus)}</StatusBadge>
+                <div className="text-[14px] text-[var(--color-ink)]">
+                  Vacated on {new Date(tenant.vacatedOn).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
                 </div>
-                {currentPayment?.state === "paid" && currentPayment?.date && (
-                  <div className="text-[13px] text-[var(--color-ink-soft)] mt-1">
-                    Paid on {new Date(currentPayment.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                  </div>
-                )}
               </div>
-              <Button size="sm" variant="ghost" onClick={() => setEditingRent(true)}>
-                Edit Status
-              </Button>
-            </div>
+            ) : (
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <div className="text-[12px] font-medium uppercase tracking-wide text-[var(--color-ink-faint)]">
+                    {monthName}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[15px] font-semibold text-[var(--color-ink)]">{currency(tenant.rent)}</span>
+                    <StatusBadge tone={paymentTone(currentStatus)} dot>{paymentLabel(currentStatus)}</StatusBadge>
+                  </div>
+                  {currentPayment?.state === "paid" && (
+                    <div className="text-[13px] text-[var(--color-ink-soft)] mt-2 space-y-1">
+                      {currentPayment.recordedAt ? (
+                        <>
+                          <div>Payment Date: {new Date(currentPayment.recordedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>
+                          <div>Payment Time: {new Date(currentPayment.recordedAt).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}</div>
+                        </>
+                      ) : currentPayment.date ? (
+                        <div>Paid on {new Date(currentPayment.date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
+                <Button size="sm" variant="ghost" onClick={() => setEditingRent(true)}>
+                  Edit Status
+                </Button>
+              </div>
+            )}
           </div>
         </Surface>
-        <Surface elevated className="space-y-4 p-6">
+        <Surface elevated className="space-y-3 sm:space-y-4 p-4 sm:p-6">
           <div className="flex items-center gap-3">
             <Avatar name={tenant.name} size="lg" />
             <div className="text-[15px] font-semibold text-[var(--color-ink)]">{tenant.name}</div>
           </div>
-          <div className="space-y-2.5 text-[13.5px] text-[var(--color-ink-soft)]">
+          <div className="min-w-0 space-y-2.5 text-[13.5px] text-[var(--color-ink-soft)]">
             <div className="flex items-center gap-2.5">
-              <Phone className="size-4 stroke-[1.6] text-[var(--color-ink-faint)]" />
-              <span className="tabular">{tenant.phone}</span>
+              <Phone className="size-4 shrink-0 stroke-[1.6] text-[var(--color-ink-faint)]" />
+              <span className="tabular truncate">{tenant.phone}</span>
             </div>
-            <div className="flex items-center gap-2.5">
-              <Mail className="size-4 stroke-[1.6] text-[var(--color-ink-faint)]" />
-              {tenant.email}
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Mail className="size-4 shrink-0 stroke-[1.6] text-[var(--color-ink-faint)]" />
+              <span className="min-w-0 break-all">{tenant.email}</span>
             </div>
           </div>
         </Surface>
       </div>
 
       <Surface elevated className="overflow-hidden">
-        <div className="px-5 pt-5">
+        <div className="px-4 pt-4 sm:px-5 sm:pt-5">
           <SectionHeader title="Payments" count={history.length} />
         </div>
         {history.length === 0 ? (
@@ -140,7 +181,7 @@ export default function TenantDetail() {
         ) : (
           <div className="mt-2 divide-y divide-[var(--color-line)]">
             {history.map((p) => (
-              <div key={p.id} className="flex items-center justify-between gap-4 px-5 py-4">
+              <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3 sm:gap-4 sm:px-5 sm:py-4">
                 <div>
                   <div className="tabular text-[14px] font-semibold text-[var(--color-ink)]">{currency(p.amount)}</div>
                   <div className="text-[12.5px] text-[var(--color-ink-soft)]">
@@ -156,9 +197,23 @@ export default function TenantDetail() {
         )}
       </Surface>
 
+      <TenantNotes tenant={tenant} />
+
       <UpdateRentModal
         open={editingRent}
         onClose={() => setEditingRent(false)}
+        tenant={tenant}
+      />
+      
+      <EditTenantRentModal
+        open={editingAgreedRent}
+        onClose={() => setEditingAgreedRent(false)}
+        tenant={tenant}
+      />
+      
+      <VacateTenantModal
+        open={vacating}
+        onClose={() => setVacating(false)}
         tenant={tenant}
       />
     </div>

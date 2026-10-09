@@ -31,39 +31,39 @@ export default function RentHistory() {
   const best = months.reduce((a, b) => (b.value > a.value ? b : a));
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 sm:space-y-8 pb-20 sm:pb-0">
       <PageHeader
         eyebrow="Insights"
         title="Rent History"
         description="Collected rent over the last six months across the portfolio."
       />
 
-      <div className="grid gap-5 sm:grid-cols-3">
-        <Surface elevated className="p-6">
+      <div className="grid grid-cols-2 gap-3 sm:gap-5 sm:grid-cols-3">
+        <Surface elevated className="col-span-2 sm:col-span-1 p-4 sm:p-6">
           <StatDisplay label="6-month total" value={currency(total, { compact: true })} />
         </Surface>
-        <Surface elevated className="p-6">
+        <Surface elevated className="p-4 sm:p-6">
           <StatDisplay label="Monthly average" value={currency(Math.round(total / 6), { compact: true })} />
         </Surface>
-        <Surface elevated className="p-6">
-          <StatDisplay label="Best month" value={currency(best.value, { compact: true })} hint={best.label} />
+        <Surface elevated className="p-4 sm:p-6">
+          <StatDisplay label="Best month" value={currency(best.value, { compact: true })} hint={<span className="mt-0.5 block">{best.label}</span>} />
         </Surface>
       </div>
 
-      <Surface elevated className="p-6 sm:p-8">
-        <h2 className="text-[15px] font-semibold text-[var(--color-ink)]">Collected rent</h2>
-        <p className="text-[13px] text-[var(--color-ink-soft)]">Monthly, in INR</p>
-        <div className="mt-8 flex h-56 items-end gap-3 sm:gap-6">
+      <Surface elevated className="p-4 sm:p-8">
+        <h2 className="text-[14px] sm:text-[15px] font-semibold text-[var(--color-ink)]">Collected rent</h2>
+        <p className="text-[12px] sm:text-[13px] text-[var(--color-ink-soft)]">Monthly, in INR</p>
+        <div className="mt-6 sm:mt-8 flex h-48 sm:h-56 items-end gap-1.5 sm:gap-6">
           {months.map((m) => (
-            <div key={m.label} className="flex flex-1 flex-col items-center gap-3">
+            <div key={m.label} className="flex flex-1 flex-col items-center gap-2 sm:gap-3">
               <div className="flex w-full flex-1 items-end">
                 <div
-                  className="w-full rounded-t-[6px] bg-[var(--color-accent)]/85 transition-all duration-700 hover:bg-[var(--color-accent)]"
+                  className="w-full rounded-t-[4px] sm:rounded-t-[6px] bg-[var(--color-accent)]/85 transition-all duration-700 hover:bg-[var(--color-accent)]"
                   style={{ height: `${(m.value / max) * 100}%` }}
                   title={currency(m.value)}
                 />
               </div>
-              <span className="text-[12px] font-medium text-[var(--color-ink-faint)]">{m.label}</span>
+              <span className="text-[10px] sm:text-[12px] font-medium text-[var(--color-ink-faint)] truncate max-w-full">{m.label}</span>
             </div>
           ))}
         </div>

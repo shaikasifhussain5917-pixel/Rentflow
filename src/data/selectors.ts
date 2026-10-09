@@ -30,11 +30,12 @@ export function propertyMetrics(units: Unit[], tenants: Tenant[]): PropertyMetri
   for (const u of units) {
     if (u.status === "occupied") {
       occupied++;
-      expected += u.rent;
       const t = u.tenantId ? byId.get(u.tenantId) : undefined;
-      if (t?.state === "paid") collected += u.rent;
+      const actualRent = t ? t.rent : u.rent;
+      expected += actualRent;
+      if (t?.state === "paid") collected += actualRent;
       else {
-        outstanding += u.rent;
+        outstanding += actualRent;
         if (t?.state === "overdue") overdueCount++;
       }
     } else if (u.status === "vacant") {

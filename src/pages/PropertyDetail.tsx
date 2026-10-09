@@ -172,7 +172,7 @@ export default function PropertyDetail() {
       <FinancialSnapshot m={m} />
       <OccupancySection units={pUnits} tenants={pTenants} m={m} />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-8">
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_340px] xl:gap-8">
         <UnitsSection
           units={pUnits}
           tenants={pTenants}

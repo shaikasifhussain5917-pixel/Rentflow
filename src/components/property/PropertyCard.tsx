@@ -40,8 +40,8 @@ export function PropertyCard({ data }: { data: PropertyRowData }) {
         />
 
         <div className="mt-4 flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <h3 className="truncate text-[16.5px] font-semibold tracking-[-0.015em] text-[var(--color-ink)]">
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[16.5px] font-semibold tracking-[-0.015em] text-[var(--color-ink)] break-words">
               {p.name}
             </h3>
             <p className="mt-0.5 truncate text-[13px] text-[var(--color-ink-soft)]">
@@ -71,8 +71,8 @@ export function PropertyCard({ data }: { data: PropertyRowData }) {
         </div>
 
         {m.outstanding > 0 && (
-          <div className="mt-3 flex items-center justify-between border-t border-[var(--color-line)] pt-3 text-[12.5px]">
-            <span className="text-[var(--color-critical)]">
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--color-line)] pt-3 text-[12.5px]">
+            <span className="text-[var(--color-critical)] truncate min-w-0">
               <span className="tabular font-medium">{currency(m.outstanding)}</span>{" "}
               {m.overdueCount > 0 ? "overdue" : "due this month"}
             </span>
@@ -80,16 +80,16 @@ export function PropertyCard({ data }: { data: PropertyRowData }) {
           </div>
         )}
         {m.outstanding === 0 && m.occupied > 0 && (
-          <div className="mt-3 flex items-center justify-between border-t border-[var(--color-line)] pt-3 text-[12.5px] text-[var(--color-ink-faint)]">
-            <span>
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--color-line)] pt-3 text-[12.5px] text-[var(--color-ink-faint)]">
+            <span className="truncate min-w-0">
               All rent collected · <span className="tabular">{formatPercent(m.occupancy)}</span> occupied
             </span>
             <ChevronRight className="size-4 stroke-[1.7] transition-transform duration-200 group-hover/card:translate-x-0.5" />
           </div>
         )}
         {m.occupied === 0 && (
-          <div className="mt-3 flex items-center justify-between border-t border-[var(--color-line)] pt-3 text-[12.5px] text-[var(--color-ink-faint)]">
-            <span>{m.total === 0 ? "Add units to begin" : "Awaiting first tenant"}</span>
+          <div className="mt-3 flex items-center justify-between gap-2 border-t border-[var(--color-line)] pt-3 text-[12.5px] text-[var(--color-ink-faint)]">
+            <span className="truncate min-w-0">{m.total === 0 ? "Add units to begin" : "Awaiting first tenant"}</span>
             <ChevronRight className="size-4 stroke-[1.7] transition-transform duration-200 group-hover/card:translate-x-0.5" />
           </div>
         )}

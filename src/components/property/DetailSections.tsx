@@ -20,8 +20,8 @@ export function FinancialSnapshot({ m }: { m: PropertyMetrics }) {
   const cell = "bg-[var(--color-surface)] p-5 sm:p-6";
 
   return (
-    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-line)] shadow-[var(--shadow-soft)] sm:grid-cols-[1.35fr_1fr_1fr_1fr]">
-      <div className={`${cell} col-span-2 sm:col-span-1`}>
+    <div className="grid grid-cols-2 gap-px overflow-hidden rounded-[var(--radius-card)] border border-[var(--color-line)] bg-[var(--color-line)] shadow-[var(--shadow-soft)] md:grid-cols-[1.35fr_1fr_1fr_1fr]">
+      <div className={`${cell} col-span-2 md:col-span-1`}>
         <StatDisplay
           size="lg"
           label="Monthly rent"
@@ -54,7 +54,7 @@ export function FinancialSnapshot({ m }: { m: PropertyMetrics }) {
           }
         />
       </div>
-      <div className={`${cell} col-span-2 sm:col-span-1`}>
+      <div className={`${cell} col-span-2 md:col-span-1`}>
         <StatDisplay
           label="Occupancy"
           value={formatPercent(Math.round(m.occupancy * 10) / 10).replace("%", "")}
@@ -147,9 +147,15 @@ export function TenantsSection({ tenants, onAdd }: { tenants: Tenant[]; onAdd: (
               </div>
               <div className="text-right">
                 <div className="tabular text-[13px] font-semibold text-[var(--color-ink)]">{currency(t.rent)}</div>
-                <StateText tone={paymentTone(t.state)} className="text-[11.5px]">
-                  {paymentLabel(t.state)}
-                </StateText>
+                {t.status === "vacated" ? (
+                  <span className="inline-flex items-center rounded-full bg-red-50 px-2 py-0.5 mt-0.5 text-[10px] font-bold uppercase tracking-wider text-red-700 ring-1 ring-inset ring-red-200">
+                    Vacated
+                  </span>
+                ) : (
+                  <StateText tone={paymentTone(t.state)} className="text-[11.5px]">
+                    {paymentLabel(t.state)}
+                  </StateText>
+                )}
               </div>
             </Link>
           ))}

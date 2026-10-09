@@ -21,7 +21,7 @@ export const primaryNav: NavItem[] = [
   { label: "Overview", to: "/dashboard", icon: LayoutDashboard },
   { label: "Properties", to: "/properties", icon: Building2 },
   { label: "Tenants", to: "/tenants", icon: Users },
-  { label: "Payments", to: "/payments", icon: CreditCard, badge: "2" },
+  { label: "Payments", to: "/payments", icon: CreditCard },
   { label: "Activity", to: "/activity", icon: Activity },
 ];
 
@@ -37,5 +37,5 @@ export const mobileNav: NavItem[] = [
   { label: "Overview", to: "/dashboard", icon: LayoutDashboard },
   { label: "Properties", to: "/properties", icon: Building2 },
   { label: "Tenants", to: "/tenants", icon: Users },
-  { label: "Payments", to: "/payments", icon: CreditCard, badge: "2" },
+  { label: "Payments", to: "/payments", icon: CreditCard },
 ];

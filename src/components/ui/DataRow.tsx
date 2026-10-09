@@ -39,7 +39,7 @@ export function DataRow({
           <div className="mt-0.5 truncate text-[12.5px] text-[var(--color-ink-soft)]">{subtitle}</div>
         )}
       </div>
-      {meta && <div className="hidden shrink-0 text-right sm:block">{meta}</div>}
+      {meta && <div className="hidden shrink-0 text-right md:block">{meta}</div>}
       {trailing && <div className="shrink-0">{trailing}</div>}
     </Comp>
   );
