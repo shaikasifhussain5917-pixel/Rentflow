@@ -1,9 +1,9 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, Lock, Loader2 } from "lucide-react";
+import { ArrowRight, Lock, Loader2, RefreshCw, Pencil, ShieldCheck } from "lucide-react";
 import { BrandMark } from "../components/shell/BrandMark";
 import { Button } from "../components/ui/Button";
-
+import { OtpInput } from "../components/auth/OtpInput";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../contexts/AuthContext";
 
@@ -24,7 +24,9 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [otp, setOtp] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isResending, setIsResending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
@@ -48,7 +50,6 @@ export default function Login() {
     
     if (errorDesc) {
       setError(errorDesc.replace(/\+/g, " "));
-      // Clean up the URL
       window.history.replaceState(null, "", window.location.pathname + window.location.hash);
     } else if (verified) {
       setMessage("Email verified successfully! You can now sign in.");
@@ -64,69 +65,134 @@ export default function Login() {
     }
   }, [session, navigate]);
 
+  const verifyOtpCode = async (codeToVerify: string) => {
+    if (codeToVerify.length !== 6) {
+      setError("Please enter the complete 6-digit code.");
+      return;
+    }
+
+    setIsLoading(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      let { data, error: verifyError } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: codeToVerify.trim(),
+        type: "signup",
+      });
+
+      // Fallback for setups where Supabase treats unconfirmed verification as type 'email'
+      if (verifyError) {
+        const fallback = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: codeToVerify.trim(),
+          type: "email",
+        });
+        if (!fallback.error && fallback.data?.session) {
+          data = fallback.data;
+          verifyError = null;
+        }
+      }
+
+      if (verifyError) throw verifyError;
+
+      if (data?.session) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        setMessage("Email verified! You can now sign in.");
+        setMode("signin");
+      }
+    } catch (err: any) {
+      setError(err.message || "Invalid or expired verification code. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (cooldown > 0 || isResending) return;
+    setIsResending(true);
+    setError(null);
+    setMessage(null);
+
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: "signup",
+        email: email.trim(),
+      });
+      if (resendError) throw resendError;
+      setMessage("A fresh 6-digit verification code has been sent to your email.");
+      setCooldown(60);
+    } catch (err: any) {
+      if (err.status === 429 || (err.message && err.message.toLowerCase().includes("rate limit"))) {
+        setError("Please wait a moment before requesting another code.");
+        setCooldown(60);
+      } else {
+        setError(err.message || "Unable to resend verification code. Please try again.");
+      }
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
     setMessage(null);
-    
-    const redirectUrl = import.meta.env.VITE_APP_URL || window.location.origin;
 
     try {
-      if (mode === "signup") {
-        const { data, error } = await supabase.auth.signUp({
-          email,
+      if (mode === "verify") {
+        await verifyOtpCode(otp);
+      } else if (mode === "signup") {
+        const { data, error: signUpError } = await supabase.auth.signUp({
+          email: email.trim(),
           password,
           options: {
             data: {
-              full_name: fullName,
+              full_name: fullName.trim(),
             },
-            emailRedirectTo: `${redirectUrl}/#/auth/callback`,
           },
         });
-        if (error) throw error;
+        if (signUpError) throw signUpError;
         
         if (data.user && !data.session) {
           setMode("verify");
+          setOtp("");
+          setCooldown(60);
+          setMessage(`We've sent a 6-digit code to ${email.trim()}.`);
         } else {
-          setMessage("Account created successfully! You can now sign in.");
-          setMode("signin");
+          setMessage("Account created successfully!");
+          navigate("/dashboard", { replace: true });
         }
       } else if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: email.trim(),
           password,
         });
-        if (error) {
-          if (error.message.toLowerCase().includes("email not confirmed")) {
+        if (signInError) {
+          if (signInError.message.toLowerCase().includes("email not confirmed")) {
             setMode("verify");
+            setOtp("");
+            setMessage("Your email has not been verified yet. Enter the 6-digit code below.");
+            supabase.auth.resend({ type: "signup", email: email.trim() }).catch(() => {});
+            setCooldown(60);
             return;
           }
-          throw error;
+          throw signInError;
         }
-        // Navigation is handled by the useEffect above when session changes
       } else if (mode === "forgot") {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        const { error: forgotError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
           redirectTo: `${window.location.origin}/#/reset-password`,
         });
-        if (error) throw error;
-        setMessage("Reset link sent. Check your email.");
+        if (forgotError) throw forgotError;
+        setMessage("Password reset instructions sent. Please check your email.");
         setMode("signin");
-      } else if (mode === "verify") {
-        const { error } = await supabase.auth.resend({
-          type: 'signup',
-          email: email,
-          options: {
-            emailRedirectTo: `${redirectUrl}/#/auth/callback`,
-          }
-        });
-        if (error) throw error;
-        setMessage("Verification email resent. Check your inbox.");
-        setCooldown(60);
       }
     } catch (err: any) {
       if (err.status === 429 || (err.message && err.message.toLowerCase().includes("rate limit"))) {
-        setError("Too many reset requests. Please wait a few minutes before trying again.");
+        setError("Too many requests. Please wait a moment before trying again.");
         if (mode === "forgot") setCooldown(60);
       } else {
         setError(err.message || "An error occurred during authentication.");
@@ -143,42 +209,109 @@ export default function Login() {
         <div className="animate-fade-rise w-full max-w-[420px]">
           <BrandMark />
 
-          <div className="mt-16 space-y-3">
+          <div className="mt-14 space-y-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--color-accent)]">
-              {mode === "forgot" ? "Account Recovery" : "Private access"}
+              {mode === "forgot"
+                ? "Account Recovery"
+                : mode === "verify"
+                ? "Email Verification"
+                : "Private access"}
             </p>
             <h1 className="font-serif text-[1.75rem] font-medium leading-[1.1] tracking-tight text-[var(--color-ink)] sm:text-4xl">
-              {mode === "signup" ? "Create your portfolio" 
-                : mode === "forgot" ? "Reset password" 
-                : mode === "verify" ? "Check your email"
+              {mode === "signup"
+                ? "Create your portfolio"
+                : mode === "forgot"
+                ? "Reset password"
+                : mode === "verify"
+                ? "Enter 6-digit code"
                 : "Enter your portfolio"}
             </h1>
-            <p className="text-[15px] text-[var(--color-ink-soft)] leading-relaxed">
-              {mode === "signup" 
-                ? "Sign up for your property command center." 
-                : mode === "forgot" 
-                ? "Enter your email to receive a reset link." 
-                : mode === "verify"
-                ? (
-                  <>
-                    We've sent a verification link to <span className="font-semibold text-[var(--color-ink)]">{email}</span>.
-                    Please confirm your email address to sign in.
-                  </>
-                )
-                : "Sign in to your property command center."}
+            <p className="text-[14.5px] text-[var(--color-ink-soft)] leading-relaxed">
+              {mode === "signup" ? (
+                "Sign up for your property command center."
+              ) : mode === "forgot" ? (
+                "Enter your email to receive password recovery instructions."
+              ) : mode === "verify" ? (
+                <span>
+                  Enter the 6-digit code sent to{" "}
+                  <span className="font-semibold text-[var(--color-ink)] break-all">{email}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("signup");
+                      setError(null);
+                      setMessage(null);
+                    }}
+                    className="ml-1.5 inline-flex items-center gap-1 font-medium text-[var(--color-accent)] hover:underline underline-offset-2"
+                  >
+                    <Pencil className="size-3" /> Edit
+                  </button>
+                </span>
+              ) : (
+                "Sign in to your property command center."
+              )}
             </p>
           </div>
 
-          <form onSubmit={submit} className="mt-10 space-y-5">
+          <form onSubmit={submit} className="mt-8 space-y-5">
             {error && (
-              <div className="rounded-xl bg-[var(--color-critical)]/10 p-3.5 text-[13.5px] text-[var(--color-critical)] border border-[var(--color-critical)]/10 shadow-sm">
+              <div className="rounded-xl bg-[var(--color-critical)]/10 p-3.5 text-[13.5px] text-[var(--color-critical)] border border-[var(--color-critical)]/15 shadow-sm">
                 {error}
               </div>
             )}
             
             {message && (
-              <div className="rounded-xl bg-[var(--color-positive)]/10 p-3.5 text-[13.5px] text-[var(--color-positive)] border border-[var(--color-positive)]/10 shadow-sm">
+              <div className="rounded-xl bg-[var(--color-positive)]/10 p-3.5 text-[13.5px] text-[var(--color-positive)] border border-[var(--color-positive)]/15 shadow-sm">
                 {message}
+              </div>
+            )}
+
+            {mode === "verify" && (
+              <div className="space-y-4 pt-2">
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[13px] font-medium text-[var(--color-ink-soft)]">
+                      Security Code
+                    </label>
+                    <span className="text-[12px] text-[var(--color-ink-faint)]">
+                      6 digits
+                    </span>
+                  </div>
+                  <OtpInput
+                    value={otp}
+                    onChange={(val) => {
+                      setOtp(val);
+                      if (error) setError(null);
+                    }}
+                    onComplete={(code) => {
+                      verifyOtpCode(code);
+                    }}
+                    disabled={isLoading}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-1 text-[13px]">
+                  <span className="text-[var(--color-ink-soft)]">Didn't get the code?</span>
+                  {cooldown > 0 ? (
+                    <span className="font-medium text-[var(--color-ink-faint)]">
+                      Resend in {cooldown}s
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={isResending}
+                      className="inline-flex items-center gap-1.5 font-semibold text-[var(--color-accent)] hover:text-[var(--color-ink)] hover:underline underline-offset-2 transition-colors cursor-pointer"
+                    >
+                      {isResending ? (
+                        <Loader2 className="size-3.5 animate-spin" />
+                      ) : (
+                        <RefreshCw className="size-3.5" />
+                      )}
+                      Resend OTP
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 
@@ -195,16 +328,18 @@ export default function Login() {
               </div>
             )}
 
-            <div className="space-y-1.5">
-              <label className="text-[13px] font-medium text-[var(--color-ink-soft)]">Email</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="h-12 w-full rounded-xl border border-white/80 bg-white/70 px-4 text-[14px] text-[var(--color-ink)] backdrop-blur-md shadow-[inset_0_1px_2px_rgba(0,0,0,0.02),0_1px_2px_rgba(255,255,255,0.7)] transition-all duration-200 placeholder:text-[var(--color-ink-faint)] hover:bg-white/85 focus:border-[var(--color-accent)] focus:bg-white/95 focus:outline-none focus:ring-4 focus:ring-[var(--color-accent)]/15 focus:shadow-[0_4px_16px_rgba(154,91,63,0.12)]"
-              />
-            </div>
+            {mode !== "verify" && (
+              <div className="space-y-1.5">
+                <label className="text-[13px] font-medium text-[var(--color-ink-soft)]">Email</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-12 w-full rounded-xl border border-white/80 bg-white/70 px-4 text-[14px] text-[var(--color-ink)] backdrop-blur-md shadow-[inset_0_1px_2px_rgba(0,0,0,0.02),0_1px_2px_rgba(255,255,255,0.7)] transition-all duration-200 placeholder:text-[var(--color-ink-faint)] hover:bg-white/85 focus:border-[var(--color-accent)] focus:bg-white/95 focus:outline-none focus:ring-4 focus:ring-[var(--color-accent)]/15 focus:shadow-[0_4px_16px_rgba(154,91,63,0.12)]"
+                />
+              </div>
+            )}
             
             {mode !== "forgot" && mode !== "verify" && (
               <div className="space-y-1.5">
@@ -230,37 +365,22 @@ export default function Login() {
               </div>
             )}
 
-            {mode === "verify" && (
-              <div className="pt-2">
-                <Button 
-                  type="button" 
-                  onClick={() => {
-                    const domain = email.split('@')[1];
-                    if (domain) {
-                      const url = domain === 'gmail.com' ? 'https://mail.google.com' : 
-                                  domain === 'outlook.com' || domain === 'hotmail.com' ? 'https://outlook.live.com' : 
-                                  domain === 'yahoo.com' ? 'https://mail.yahoo.com' : 
-                                  `https://${domain}`;
-                      window.open(url, '_blank');
-                    }
-                  }} 
-                  className="h-12 w-full text-[14.5px] shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
-                >
-                  Open your email
-                </Button>
-              </div>
-            )}
-
-            <div className={mode === "verify" ? "mt-4" : "pt-2"}>
-              <Button type="submit" variant={mode === "verify" ? "secondary" : "primary"} disabled={isLoading || ((mode === "forgot" || mode === "verify") && cooldown > 0)} className="h-12 w-full text-[14.5px] shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99]" iconRight={isLoading && mode !== "verify" ? <Loader2 className="animate-spin" /> : mode !== "verify" ? <ArrowRight /> : undefined}>
+            <div className="pt-2">
+              <Button
+                type="submit"
+                variant={mode === "verify" ? "primary" : "primary"}
+                disabled={isLoading || (mode === "forgot" && cooldown > 0) || (mode === "verify" && otp.length !== 6)}
+                className="h-12 w-full text-[14.5px] shadow-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
+                iconRight={isLoading ? <Loader2 className="animate-spin" /> : mode === "verify" ? <ShieldCheck className="size-4" /> : <ArrowRight />}
+              >
                 {isLoading 
-                  ? "Processing..." 
+                  ? "Verifying..." 
                   : mode === "signup" 
                   ? "Create account" 
                   : mode === "forgot" 
                   ? (cooldown > 0 ? `Try again in ${cooldown}s` : "Send reset link")
                   : mode === "verify"
-                  ? (cooldown > 0 ? `Try again in ${cooldown}s` : "Resend confirmation email")
+                  ? "Verify & Continue"
                   : "Sign in"}
               </Button>
             </div>
@@ -269,13 +389,44 @@ export default function Login() {
               {mode === "signin" ? (
                 <>
                   Don't have an account?{" "}
-                  <button type="button" onClick={() => setMode("signup")} className="font-semibold text-[var(--color-accent)] transition-colors hover:text-[var(--color-ink)] hover:underline underline-offset-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("signup");
+                      setError(null);
+                      setMessage(null);
+                    }}
+                    className="font-semibold text-[var(--color-accent)] transition-colors hover:text-[var(--color-ink)] hover:underline underline-offset-2"
+                  >
                     Sign up
+                  </button>
+                </>
+              ) : mode === "verify" ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("signin");
+                      setMessage(null);
+                      setError(null);
+                      setOtp("");
+                    }}
+                    className="font-semibold text-[var(--color-accent)] transition-colors hover:text-[var(--color-ink)] hover:underline underline-offset-2"
+                  >
+                    Back to Sign In
                   </button>
                 </>
               ) : (
                 <>
-                  <button type="button" onClick={() => {setMode("signin"); setMessage(null); setError(null);}} className="font-semibold text-[var(--color-accent)] transition-colors hover:text-[var(--color-ink)] hover:underline underline-offset-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMode("signin");
+                      setMessage(null);
+                      setError(null);
+                    }}
+                    className="font-semibold text-[var(--color-accent)] transition-colors hover:text-[var(--color-ink)] hover:underline underline-offset-2"
+                  >
                     Back to Sign In
                   </button>
                 </>
@@ -285,7 +436,7 @@ export default function Login() {
 
           <div className="mt-12 flex items-center gap-2 text-[12.5px] text-[var(--color-ink-faint)]">
             <Lock className="size-4 stroke-[1.5]" />
-            Secured private workspace
+            Secured private workspace · 6-digit OTP verification
           </div>
         </div>
       </div>
